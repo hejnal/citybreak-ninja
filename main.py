@@ -24,15 +24,18 @@ FLIGHTSTATS_CONFIG = {
 # }
 
 input_dates = [ {'outbound': '2019-06-14', 'inbound': '2019-06-16'}]
-input_hours = { 'outbound': [17, 18]}
+input_hours = { 'outbound': [17, 18, 19, 20, 21, 22, 23]}
 
-input_home_airports = ['STN']
+input_home_airports = ['STN', 'LTN', 'LGW', 'LCY', 'LHR', 'SEN']
 
 def main():
   # main loop
 
   # save an unique destination in a set
   destination_airports = set()
+
+  total_start_ts = datetime.datetime.now()
+  print('{} [STARTED] Citybreak - here we go!'.format(total_start_ts))
 
   for dates in input_dates:
     outbound_date = dates['outbound']
@@ -61,6 +64,9 @@ def main():
         finish_ts = datetime.datetime.now()
         print('{} [FINISHED] Process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
         destination_airports = update_destination_set(routes, destination_airports)
+  
+  total_finish_ts = datetime.datetime.now()
+  print('{} [FINISHED] Citybreak process finshed. It has taken: {}s.'.format(total_finish_ts, (total_finish_ts - total_start_ts).seconds))
 
 def fetch_outbound_scheduled_flights(date, hourOfDay, fromAirport):
   parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
