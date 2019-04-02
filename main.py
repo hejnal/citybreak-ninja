@@ -24,7 +24,7 @@ SKYSCANNER_API_CONFIG = {
 }
 
 input_dates = [ {'outbound': '2019-06-14', 'inbound': '2019-06-16'}]
-input_hours = { 'outbound': [17, 18, 19, 20, 21, 22, 23]}
+input_hours = { 'outbound': [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]}
 
 input_home_airports = ['STN', 'LTN', 'LGW', 'LCY', 'LHR', 'SEN']
 
@@ -51,6 +51,10 @@ def main():
         print('{} [STARTED] Fetching data for {outbound_date} date at {hour}h from {airport}.'
           .format(start_ts, outbound_date=outbound_date, hour=hour, airport=airport))
         routes = fetch_outbound_scheduled_flights(outbound_date, hour, airport)
+        print('{} [INFO] Fetched airport dictionary {airport_dict}.'
+          .format(start_ts, airport_dict=airport_dict))
+        print('{} [INFO] Fetched airlines dictionary {airline_dict}.'
+          .format(start_ts, airline_dict=airline_dict))
         # update the fare for all routes
         routes = update_flight_fare(routes)
         # update the directon of the routes
@@ -121,7 +125,10 @@ def fetch_min_fare(country, currency, locale, fromAirport, toAirport, date):
   # create a request url (using the dictionary)
   request_url = SKYSCANNER_API_CONFIG['host'] + SKYSCANNER_API_CONFIG['path'].format(**request_args)
   response = requests.get(request_url, headers=request_headers)
-  return response.json()['Quotes'][0]['MinPrice']
+  if len(response.json()['Quotes']) > 0:
+    return response.json()['Quotes'][0]['MinPrice']
+  else:
+    return 'NaN'
 
 def fetch_inbound_scheduled_flights(date, fromAirport, toAirport):
   parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
@@ -181,16 +188,15 @@ def update_carrier_details(routes):
     routes[idx] = {**routes[idx], **prefixed_carrier}
   return routes
   
-
 def update_airport_dictionary(airports):
   for airport in airports:
     if airport['fs'] not in airport_dict:
-      airport_dict[airport['fs']] = airport['fs']
+      airport_dict[airport['fs']] = airport
 
 def update_airline_dictionary(airlines):
   for airline in airlines:
     if airline['fs'] not in airline_dict:
-      airline_dict[airline['fs']] = airline['fs']
+      airline_dict[airline['fs']] = airline
 
 def update_destination_set(routes, destination_set):
   for route in routes:
