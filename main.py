@@ -1,4 +1,4 @@
-import os, json, requests, datetime, logging
+import os, sys, json, requests, datetime, logging
 
 logging.basicConfig(format='%(asctime)s %(message)s')
 logging.info('Welcome to Citybreak Ninja.')
@@ -23,7 +23,14 @@ SKYSCANNER_API_CONFIG = {
   'api_key': os.environ.get('SKYSCANNER_API_KEY', None),
 }
 
-input_dates = [ {'outbound': '2019-06-14', 'inbound': '2019-06-16'}]
+# get arguments
+if len(sys.argv) == 3:
+  outbound = sys.argv[1]
+  inbound = sys.argv[2]
+else:
+  print('Please provide two dates: outbound and inbound, ex: python main.py 2019-06-14 2019-06-16')
+
+input_dates = [ {'outbound': outbound, 'inbound': inbound}]
 input_hours = { 'outbound': [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]}
 
 input_home_airports = ['STN', 'LTN', 'LGW', 'LCY', 'LHR', 'SEN']
@@ -48,15 +55,23 @@ def main():
     for airport in input_home_airports:
       for hour in input_hours['outbound']:
         start_ts = datetime.datetime.now()
-        print('{} [STARTED] Fetching data for {outbound_date} date at {hour}h from {airport}.'
+        print('{} [STARTED] Flights data fetch for {outbound_date} date at {hour}h from {airport}.'
           .format(start_ts, outbound_date=outbound_date, hour=hour, airport=airport))
         routes = fetch_outbound_scheduled_flights(outbound_date, hour, airport)
-        print('{} [INFO] Fetched airport dictionary {airport_dict}.'
-          .format(start_ts, airport_dict=airport_dict))
-        print('{} [INFO] Fetched airlines dictionary {airline_dict}.'
-          .format(start_ts, airline_dict=airline_dict))
+        finish_ts = datetime.datetime.now()
+        print('{} [FINISHED] Flights data fetch process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
+        # if no routes, then continue
+        if len(routes) == 0:
+          continue
+
         # update the fare for all routes
+        start_ts = datetime.datetime.now()
+        print('{} [STARTED] Fares data fetch for {outbound_date} date at {hour}h from {airport}.'
+          .format(start_ts, outbound_date=outbound_date, hour=hour, airport=airport))
         routes = update_flight_fare(routes)
+        finish_ts = datetime.datetime.now()
+        print('{} [FINISHED] Fares data fetch process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
+        
         # update the directon of the routes
         routes = update_direction(routes, 'outbound')
         # add info about airports (departures, and arrival)
@@ -64,19 +79,29 @@ def main():
         # add info about carrier
         routes = update_carrier_details(routes)
         append_results_file(CONFIG['output_filename'], routes)
-        finish_ts = datetime.datetime.now()
-        print('{} [FINISHED] Process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
         destination_airports = update_destination_set(routes, destination_airports)
 
     print('{} Step 2, find all return flights from following destinations: {}'.format(datetime.datetime.now(), destination_airports))
     for fromAirport in destination_airports:
       for toAirport in input_home_airports:
         start_ts = datetime.datetime.now()
-        print('{} [STARTED] Fetching data for {inbound_date} date from {fromAirport} to {toAirport} home airport.'
+        print('{} [STARTED] Flights data fetch for {inbound_date} date from {fromAirport} to {toAirport} home airport.'
           .format(start_ts, inbound_date=inbound_date, fromAirport=fromAirport, toAirport=toAirport))
         routes = fetch_inbound_scheduled_flights(inbound_date, fromAirport, toAirport)
+        finish_ts = datetime.datetime.now()
+        print('{} [FINISHED] Flights data fetch process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
+        # if no routes, then continue
+        if len(routes) == 0:
+          continue
+
         # update the fare for all routes
+        start_ts = datetime.datetime.now()
+        print('{} [STARTED] Fares data fetch for {inbound_date} date from {fromAirport} to {toAirport} home airport.'
+          .format(start_ts, inbound_date=inbound_date, fromAirport=fromAirport, toAirport=toAirport))
         routes = update_flight_fare(routes)
+        finish_ts = datetime.datetime.now()
+        print('{} [FINISHED] Fares data fetch process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
+        
         # update the directon of the routes
         routes = update_direction(routes, 'inbound')
         # add info about airports (departures, and arrival)
@@ -84,8 +109,7 @@ def main():
         # add info about carrier
         routes = update_carrier_details(routes)
         append_results_file(CONFIG['output_filename'], routes)
-        finish_ts = datetime.datetime.now()
-        print('{} [FINISHED] Process finshed. It has taken: {}s.'.format(finish_ts, (finish_ts - start_ts).seconds))
+        
   
   total_finish_ts = datetime.datetime.now()
   print('{} [FINISHED] Citybreak process finshed. It has taken: {}s.'.format(total_finish_ts, (total_finish_ts - total_start_ts).seconds))
@@ -105,10 +129,18 @@ def fetch_outbound_scheduled_flights(date, hourOfDay, fromAirport):
   request_params['appKey'] = FLIGHTSTATS_CONFIG['api_key']
   # create a request url (using the dictionary)
   request_url = FLIGHTSTATS_CONFIG['host'] + FLIGHTSTATS_CONFIG['routes_from_path'].format(**request_args)
-  response = requests.get(request_url, params=request_params)
-  update_airport_dictionary(response.json()['appendix']['airports'])
-  update_airline_dictionary(response.json()['appendix']['airlines'])
-  return response.json()['scheduledFlights']
+  try:
+    response = requests.get(request_url, params=request_params)
+    # update airlines and airport dictionary
+    if 'appendix' in response.json() and 'airports' in response.json()['appendix']:
+      update_airport_dictionary(response.json()['appendix']['airports'])
+    if 'appendix' in response.json() and 'airlines' in response.json()['appendix']:
+      update_airline_dictionary(response.json()['appendix']['airlines'])
+    return response.json()['scheduledFlights']
+  except:
+    print('{} [ERROR] Problem calling an API on url {request_url}.'
+      .format(datetime.datetime.now(), request_url=request_url))
+  return []
 
 def fetch_min_fare(country, currency, locale, fromAirport, toAirport, date):
   # arguments for the specific request
@@ -124,11 +156,16 @@ def fetch_min_fare(country, currency, locale, fromAirport, toAirport, date):
   request_headers['X-RapidAPI-Key'] = SKYSCANNER_API_CONFIG['api_key']
   # create a request url (using the dictionary)
   request_url = SKYSCANNER_API_CONFIG['host'] + SKYSCANNER_API_CONFIG['path'].format(**request_args)
-  response = requests.get(request_url, headers=request_headers)
-  if len(response.json()['Quotes']) > 0:
-    return response.json()['Quotes'][0]['MinPrice']
-  else:
-    return 'NaN'
+  try:
+    response = requests.get(request_url, headers=request_headers)
+    if 'Quotes' in response.json() and len(response.json()['Quotes']) > 0:
+      return response.json()['Quotes'][0]['MinPrice']
+    else:
+      return 'NaN'
+  except:
+    print('{} [ERROR] Problem calling an API on url {request_url}.'
+      .format(datetime.datetime.now(), request_url=request_url))
+  return 'NaN'
 
 def fetch_inbound_scheduled_flights(date, fromAirport, toAirport):
   parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
@@ -146,10 +183,18 @@ def fetch_inbound_scheduled_flights(date, fromAirport, toAirport):
   request_params['appKey'] = FLIGHTSTATS_CONFIG['api_key']
   # create a request url (using the dictionary)
   request_url = FLIGHTSTATS_CONFIG['host'] + FLIGHTSTATS_CONFIG['fixed_route_path'].format(**request_args)
-  response = requests.get(request_url, params=request_params)
-  update_airport_dictionary(response.json()['appendix']['airports'])
-  update_airline_dictionary(response.json()['appendix']['airlines'])
-  return response.json()['scheduledFlights']
+  try:
+    response = requests.get(request_url, params=request_params)
+    # update airlines and airport dictionary
+    if 'appendix' in response.json() and 'airports' in response.json()['appendix']:
+      update_airport_dictionary(response.json()['appendix']['airports'])
+    if 'appendix' in response.json() and 'airlines' in response.json()['appendix']:
+      update_airline_dictionary(response.json()['appendix']['airlines'])
+    return response.json()['scheduledFlights']
+  except:
+    print('{} [ERROR] Problem calling an API on url {request_url}.'
+      .format(datetime.datetime.now(), request_url=request_url))
+  return []
 
 def append_results_file(filename, data):
   with open(filename, 'a+') as outfile:
